@@ -1,0 +1,224 @@
+/* pi-web-ui base (Tailwind v4 + mini-lit tokens) */
+@import "../../dist/app.css";
+
+/* ==========================================================================
+   MoneyShot glass theme
+   Remap pi-web-ui's dark tokens to translucent "glass" surfaces so the chat
+   floats over the same photo background as the data-gateway / moneyshot UI.
+   The app forces `.dark` on <html>.
+   ========================================================================== */
+.dark {
+	--background: oklch(0.17 0.02 250 / 0.32);
+	--foreground: oklch(0.98 0 0);
+	--card: oklch(0.21 0.02 250 / 0.5);
+	--card-foreground: oklch(0.98 0 0);
+	/* Popovers/dialogs must stay legible → keep them mostly opaque. */
+	--popover: oklch(0.17 0.02 250 / 0.96);
+	--popover-foreground: oklch(0.98 0 0);
+	--primary: oklch(0.72 0.13 250);
+	--primary-foreground: oklch(0.16 0.02 250);
+	--secondary: oklch(1 0 0 / 0.08);
+	--secondary-foreground: oklch(0.98 0 0);
+	--muted: oklch(1 0 0 / 0.06);
+	--muted-foreground: oklch(0.82 0 0);
+	--accent: oklch(1 0 0 / 0.12);
+	--accent-foreground: oklch(0.98 0 0);
+	--border: oklch(1 0 0 / 0.14);
+	--input: oklch(1 0 0 / 0.1);
+	--ring: oklch(0.72 0.13 250);
+}
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+}
+
+/* ---- Scene: full-viewport photo background (mirrors glass.css .scene) ---- */
+.ms-scene {
+	min-height: 100vh;
+	height: 100vh;
+	padding: 2.5vh 3vw;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	box-sizing: border-box;
+	background:
+		linear-gradient(rgba(20, 26, 34, 0.2), rgba(20, 26, 34, 0.32)),
+		url("/moneyshot/background.png") center / cover no-repeat fixed,
+		radial-gradient(1200px 800px at 78% 18%, #6fa8c7 0%, transparent 55%),
+		radial-gradient(900px 900px at 12% 88%, #3a4a63 0%, transparent 60%),
+		linear-gradient(135deg, #2b3a4d 0%, #1c2836 100%);
+	background-color: #222d3c;
+}
+
+/* ---- Board: the glass panel that holds the chat ---- */
+.ms-board {
+	position: relative;
+	width: min(1180px, 100%);
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border-radius: 26px;
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.22),
+		0 24px 60px rgba(0, 0, 0, 0.34);
+	backdrop-filter: blur(30px) saturate(150%);
+}
+
+/* Sign-in variant: centered, not full height. */
+.ms-board--signin {
+	flex: none;
+	margin: auto;
+	align-items: center;
+	justify-content: center;
+	gap: 22px;
+	padding: 48px 40px;
+	min-height: 320px;
+	width: min(560px, 100%);
+}
+
+.ms-title {
+	margin: 0;
+	color: #fff;
+	/* 40% thinner: 750 -> 450 */
+	font-weight: 450;
+	letter-spacing: -0.05em;
+	font-size: clamp(32px, 5vw, 60px);
+	text-shadow: 0 14px 38px rgba(0, 0, 0, 0.34);
+	/* CloudPe cloud icon sits before the wordmark. */
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+}
+/* Cloud mark scales with the title font size (transparent, non-square → keep
+   aspect ratio via auto width). */
+.ms-cloud {
+	height: 35px;
+	width: 35px;
+	object-fit: contain;
+	flex: 0 0 auto;
+}
+.ms-title--sm {
+	/* Top-right brand mark next to the avatar — set in the Edu NSW ACT Cursive
+	   handwriting face. Reset the parent's tight tracking/heavy weight so the
+	   cursive letterforms connect and breathe. */
+	font-family: "Edu NSW ACT Cursive", cursive;
+	font-size: clamp(22px, 2.6vw, 32px);
+	/* 40% thinner: 500 -> 300 (font floors at 400) */
+	font-weight: 300;
+	letter-spacing: normal;
+}
+
+.ms-google-shell {
+	min-height: 60px;
+	padding: 10px;
+	display: grid;
+	place-items: center;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.1);
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.ms-blocked {
+	margin: 0;
+	color: rgba(255, 255, 255, 0.82);
+	text-align: center;
+	line-height: 1.5;
+}
+
+/* ---- Header row inside the board ---- */
+.ms-header {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	/* Everything lives on the right now. */
+	justify-content: flex-end;
+	gap: 16px;
+	padding: 14px 18px;
+	/* Match the chat body surface so the top bar isn't a different-colored band. */
+	background: var(--background);
+}
+
+/* Right-side group: "MoneyShot" text next to the circular avatar. */
+.ms-user {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+/* Sign-out control reduced to just the circular avatar. */
+.ms-avatar {
+	width: 34px;
+	height: 34px;
+	padding: 0;
+	border-radius: 999px;
+	overflow: hidden;
+	display: grid;
+	place-items: center;
+	background: rgba(255, 255, 255, 0.1);
+	border: 1px solid rgba(255, 255, 255, 0.22);
+	color: #fff;
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+	transition: box-shadow 0.15s ease, transform 0.08s ease;
+}
+.ms-avatar:hover {
+	box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14);
+}
+.ms-avatar img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	border-radius: 999px;
+}
+
+/* ---- ChatPanel fills the remaining board height ---- */
+.ms-board chat-panel {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Hide the token/cost stats row that AgentInterface renders directly below the
+   composer (the <div> sibling right after <message-editor>). Single backend,
+   no per-turn cost to surface. */
+.ms-board message-editor + div {
+	display: none !important;
+}
+
+/* No empty space at the top of the message list — the first message starts
+   flush at the top-left of the chat area (kill the messages container's top
+   padding and the first message's own top padding). */
+.ms-board .max-w-3xl.p-4 {
+	padding-top: 0 !important;
+}
+.ms-board .max-w-3xl.p-4 > *:first-child .user-message-container,
+.ms-board .max-w-3xl.p-4 > *:first-child {
+	padding-top: 0 !important;
+	margin-top: 0 !important;
+}
+
+/* Hide the per-response token/cost line under each assistant (Hermes) reply
+   (the formatUsage <div> in assistant-message). */
+.ms-board assistant-message .px-4.mt-2.text-xs.text-muted-foreground {
+	display: none !important;
+}
+
+/* User messages: drop the chat-bubble look (gradient/border/blur/rounded) and
+   instead mark them with a brown vertical line on the left. */
+.ms-board .user-message-container {
+	background: none !important;
+	border: none !important;
+	border-left: 3px solid #8b5a2b !important;
+	border-radius: 0 !important;
+	backdrop-filter: none !important;
+	padding-left: 14px !important;
+}
