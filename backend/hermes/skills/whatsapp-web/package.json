@@ -1,0 +1,12 @@
+{
+  "name": "hermes-skill-whatsapp-web",
+  "private": true,
+  "type": "module",
+  "description": "WhatsApp Web (Baileys) CLI backing the Hermes whatsapp-web skill",
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.7.9",
+    "pino": "^9.5.0",
+    "qrcode": "^1.5.4"
+  }
+}

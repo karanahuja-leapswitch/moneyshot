@@ -1,0 +1,22 @@
+# Hermes agent config — copy to config.yaml (same dir) and fill in your model.
+# This dir is mounted at /opt/data (HERMES_HOME) inside the container, so Hermes
+# reads it as ~/.hermes/config.yaml. Secrets here stay on the server (gitignored).
+model:
+  # Provider "custom" = any OpenAI-compatible endpoint. Set base_url + default.
+  provider: "custom"
+  # Model name your endpoint expects (advertised on /v1/models as this name too).
+  default: "REPLACE_WITH_MODEL_NAME"
+  # Your endpoint's base URL, including /v1 if it uses the OpenAI path scheme.
+  base_url: "https://REPLACE_WITH_YOUR_ENDPOINT/v1"
+  # API key for your endpoint. Set it here (server-only, gitignored) or export
+  # CUSTOM_API_KEY in hermes.env — inline here is simplest and unambiguous.
+  api_key: "REPLACE_WITH_YOUR_MODEL_API_KEY"
+
+# External MCP servers whose tools the agent can call. The read-only HostBill MCP
+# (ultron) exposes get_clients / get_tickets / get_invoices / get_orders /
+# hostbill_call. Reachable by container name because hermes joins hbnet (see
+# docker-compose.yml). Read-only + no per-user RBAC — every chat user gets read
+# access to HostBill data.
+mcp_servers:
+  hostbill:
+    url: "http://hostbill-gateway-ultron-1:8080/mcp"

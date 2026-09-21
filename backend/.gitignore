@@ -1,0 +1,9 @@
+# Secrets and runtime state — never commit.
+bff/bff.env
+hermes/hermes.env
+hermes/data/*
+!hermes/data/config.yaml.example
+*.env
+!*.env.example
+*.log
+node_modules/
