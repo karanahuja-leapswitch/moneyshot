@@ -1,9 +1,17 @@
 # Secrets and runtime state — never commit.
 bff/bff.env
 hermes/hermes.env
-hermes/data/*
-!hermes/data/config.yaml.example
+db.env
 *.env
 !*.env.example
+# Hermes runtime home (sessions, live config, memory, logs) — keep only the example.
+hermes/data/
+!hermes/data/config.yaml.example
+# Frontend build output is owned by the UI project.
+web/
+# Junk / logs / deps
 *.log
+*.pid
 node_modules/
+__pycache__/
+creds.json

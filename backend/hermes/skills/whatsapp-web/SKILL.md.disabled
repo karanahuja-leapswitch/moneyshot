@@ -1,0 +1,84 @@
+---
+name: whatsapp-web
+description: "Send a WhatsApp message to ONE recipient (only if connected). For 2+ recipients or a list, use send-whatsapp-bulk instead."
+version: 2.0.0
+author: MoneyShot
+license: MIT
+platforms: [linux]
+metadata:
+  hermes:
+    tags: [WhatsApp, Messaging, Send]
+    requires_toolsets: [terminal]
+---
+
+# WhatsApp Web (send)
+
+Send a WhatsApp text message from the user's **already-connected** WhatsApp account.
+Backed by `scripts/wa.js` (Baileys, WhatsApp Web multi-device).
+
+⚠️ **Unofficial + risky.** Uses the unofficial WhatsApp Web protocol — against
+WhatsApp's ToS; the linked number can be **banned**, especially for bulk sending.
+Only send to recipients the user explicitly named. Never mass-send; if asked to blast
+many numbers, warn and confirm first.
+
+> **Connecting is NOT done here.** Pairing/QR happens ONLY on the dedicated
+> **Connect WhatsApp** screen in the app. This skill must **never** run `link` or show
+> a QR in chat. It only checks connection and sends.
+
+## When to Use
+The user asks to send/deliver a WhatsApp message to **exactly ONE recipient**. They give
+ONLY the **recipient number** (full international format e.g. `91XXXXXXXXXX`) and the
+**message text**. The **sender is always the user's connected WhatsApp account** — never
+ask for, expect, or pass a "from" number; the skill always sends from whatever WhatsApp is
+connected.
+
+> **⛔ Multiple recipients? Do NOT use this skill.** If the user names **2 or more**
+> numbers, gives a list, or says "bulk", STOP and use the **`send-whatsapp-bulk`** skill
+> instead — it stages all numbers at once and dispatches them in the background with proper
+> pacing, cooldown, and DB logging. Looping this single-send skill per number is wrong:
+> it's slow (a synchronous send + a model turn each) and skips all the safety pacing.
+
+## Setup (once)
+Skill dir: `$HERMES_HOME/skills/whatsapp-web`. Set a shorthand and ensure deps exist:
+```bash
+WA="$HERMES_HOME/skills/whatsapp-web"
+[ -d "$WA/node_modules" ] || (cd "$WA" && npm install --omit=dev --no-audit --no-fund)
+```
+
+## Procedure
+
+### 1. Check the connection FIRST (gate) — always
+```bash
+node "$WA/scripts/wa.js" status
+```
+Read the JSON's **`connected`** boolean:
+- **`connected: false`** (or an `error`/`not_linked`) → **STOP. Do NOT send, do NOT
+  pair, do NOT run `link` or show a QR.** Reply with exactly the *Not-connected reply*
+  below and end your turn.
+- **`connected: true`** → continue to step 2.
+
+### 2. Send (only when connected) — always from the connected account
+```bash
+node "$WA/scripts/wa.js" send --to <TO> --text "<MESSAGE>"
+```
+**Never pass `--from`** — the skill sends from the connected WhatsApp automatically.
+On `{"ok":true,"to":"…","id":"…","from":"…"}` confirm to the user (name the recipient;
+the `from` in the result is the connected number). On error, report the `error` field
+and what it means (see Pitfalls).
+
+## Not-connected reply (use verbatim when `connected` is false)
+> Your WhatsApp isn't connected to MoneyShot yet, so I can't send this. Connect it
+> here: **[Connect WhatsApp](https://ultron.lsnw.io/moneyshot/?connect=whatsapp)** —
+> or click the circle in the top-right corner and choose **Connect WhatsApp**, then
+> scan the QR code. Once connected, ask me again and I'll send it.
+
+## Pitfalls
+- `not_linked` / `connected:false` → not connected; give the *Not-connected reply*. Never pair here.
+- `need_from` → more than one WhatsApp account is connected (unusual). Do NOT ask the user for a "from" number; tell them to remove the extra connection on the Connect WhatsApp screen so exactly one remains, then retry.
+- `recipient_not_on_whatsapp` → the `--to` number has no WhatsApp account (check the country code).
+- `logged_out` → WhatsApp invalidated/unlinked the session; treat as not connected → *Not-connected reply*.
+- Message text with quotes/newlines: pass it as a single quoted `--text` argument.
+
+## Verification
+A successful send prints `{"ok":true,"to":"…","id":"…","from":"…"}`. Connection can be
+re-checked any time with `node "$WA/scripts/wa.js" status` → `"connected":true`.

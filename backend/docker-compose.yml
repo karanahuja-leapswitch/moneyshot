@@ -26,18 +26,42 @@ services:
       - API_SERVER_ENABLED=true
       - API_SERVER_HOST=0.0.0.0
       - API_SERVER_PORT=8642
+      # Shared debug log dir (also mounted in the wa sidecar) → one whatsapp.log.
+      - WA_LOG_DIR=/walogs
+    # DATABASE_URL (revenue-recovery DB for the bulk-send skill) comes from
+    # hermes.env — do NOT also put it here: an `environment:` entry overrides
+    # env_file and would clobber the real password with a default.
     volumes:
       # Persistent agent home: config.yaml (provider/model), memory, skills.
       - ./hermes/data:/opt/data
       # Shared with bff: the whatsapp-web skill writes QR PNGs here so the bff can
       # serve them to the browser at a short URL (the model won't echo a data-URI).
       - waqr:/waqr
+      # Shared debug log (also mounted in the wa sidecar).
+      - walogs:/walogs
     command: ["gateway", "run"]
     expose:
       - "8642"
     # hbnet lets Hermes reach the read-only HostBill MCP (hostbill-gateway-ultron-1:8080)
     # for tools like get_clients / get_tickets, configured in hermes/data/config.yaml.
     networks: [msnet, hbnet]
+
+  # Postgres for revenue-recovery data: customers + customer_messages. Private
+  # (msnet only). Tables created on first init via db/init.sql.
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    env_file:
+      - ./db.env
+    environment:
+      - POSTGRES_DB=moneyshot
+      - POSTGRES_USER=moneyshot
+    volumes:
+      - msdb:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    expose:
+      - "5432"
+    networks: [msnet]
 
   # Auth + SSE bridge: verifies the Google ID token, injects the Hermes key.
   bff:
@@ -48,11 +72,37 @@ services:
       - ./bff/bff.env
     depends_on:
       - hermes
+      - db
     expose:
       - "8000"
     volumes:
       # Read-only: serve WhatsApp QR PNGs written by the hermes skill.
       - waqr:/waqr:ro
+    networks: [msnet]
+
+  # WhatsApp control service (pektown-style helper): drives QR pairing / status /
+  # logout over HTTP for the dedicated "Connect WhatsApp" screen, keyed per Google
+  # user. Runs the same wa.js as the chat skill and shares its sessions dir with
+  # hermes (via the bind mount below), so a session linked on the connect screen is
+  # the same one the chat agent sends through. Internal only (msnet); the bff gates.
+  wa:
+    image: node:22-slim
+    working_dir: /skill
+    user: "10000:10000"
+    environment:
+      - WA_SVC_PORT=8100
+      - WA_QR_DIR=/waqr
+      - WA_QR_URL_PREFIX=/moneyshot/api/qr
+      - WA_LOG_DIR=/walogs
+    volumes:
+      # Same host dir hermes sees at /opt/data/skills/whatsapp-web → shared sessions + node_modules.
+      - ./hermes/data/skills/whatsapp-web:/skill
+      - waqr:/waqr
+      - walogs:/walogs
+    command: ["node", "scripts/wa.js", "serve"]
+    expose:
+      - "8100"
+    restart: unless-stopped
     networks: [msnet]
 
   # Web tier: serves the SPA under /moneyshot/ and proxies /moneyshot/api/ to
@@ -84,3 +134,7 @@ networks:
 volumes:
   # Small shared scratch for WhatsApp QR PNGs (hermes writes, bff serves).
   waqr:
+  # Postgres data for customers / customer_messages.
+  msdb:
+  # Shared WhatsApp debug log (hermes + wa write, one whatsapp.log).
+  walogs:

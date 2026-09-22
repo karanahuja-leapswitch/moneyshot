@@ -20,3 +20,22 @@ model:
 mcp_servers:
   hostbill:
     url: "http://hostbill-gateway-ultron-1:8080/mcp"
+
+# Restrict the web (api_server) agent to only the toolsets it needs. This is the
+# single biggest lever for latency + reliability: it shrinks the per-turn prompt
+# (fewer tool schemas) and stops the model wandering into browser/web/file/skill_manage.
+# HostBill MCP tools are UNAFFECTED (they come from mcp_servers above, not toolsets).
+platform_toolsets:
+  api_server:
+    - terminal   # run the skill scripts (bulk.js / wa.js)
+    - skills     # view + use skills
+
+# Fast, low-latency posture (also disables Hermes' autonomous self-editing, which
+# otherwise rewrites skills and adds tool-loop latency).
+reasoning_effort: low
+curator:
+  enabled: false
+skills:
+  write_approval: true
+memory:
+  write_approval: true

@@ -23,6 +23,7 @@ import os
 import os as _os
 import re
 
+import asyncpg
 import httpx
 import jwt
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -53,6 +54,20 @@ STRIP_RESP_HEADERS = {
 
 app = FastAPI(title="moneyshot-hermes-bridge")
 _jwks = PyJWKClient(GOOGLE_JWKS)
+
+# Revenue-recovery Postgres — read-only here (WhatsApp disconnect stats). Lazily
+# created so the bridge still starts if the DB is briefly down.
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+_pg_pool: "asyncpg.Pool | None" = None
+
+
+async def _pg() -> "asyncpg.Pool":
+    global _pg_pool
+    if _pg_pool is None:
+        if not DATABASE_URL:
+            raise HTTPException(status_code=503, detail="db not configured")
+        _pg_pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=3)
+    return _pg_pool
 
 
 def _require_user(authorization: str) -> dict:
@@ -109,6 +124,9 @@ async def health() -> dict:
 # still requires the target phone to scan it.
 QR_DIR = _os.environ.get("WA_QR_DIR", "/waqr")
 _QR_NAME = re.compile(r"^[0-9a-f]{32}\.png$")
+
+# WhatsApp control service (wa.js `serve`), reached over the private network.
+WA_SVC_URL = _os.environ.get("WA_SVC_URL", "http://wa:8100").rstrip("/")
 
 
 @app.get("/qr/{name}")
@@ -188,3 +206,67 @@ async def models(request: Request, authorization: str = Header(default="")):
 @app.get("/v1/capabilities")
 async def capabilities(request: Request, authorization: str = Header(default="")):
     return await _proxy(request, "/v1/capabilities", authorization)
+
+
+# --- WhatsApp connect (dedicated screen, not via chat) ----------------------
+# Each signed-in user links their OWN WhatsApp; the session is keyed by their
+# verified Google email so the connect screen and the chat agent share one link.
+async def _wa_proxy(method: str, path: str, user: str) -> Response:
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            r = await client.request(method, f"{WA_SVC_URL}{path}", params={"user": user})
+        except Exception as exc:  # noqa: BLE001
+            return JSONResponse({"ok": False, "error": "wa_unreachable", "message": str(exc)}, status_code=502)
+    try:
+        return JSONResponse(r.json(), status_code=r.status_code)
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": "bad_upstream"}, status_code=502)
+
+
+@app.get("/wa/status")
+async def wa_status(authorization: str = Header(default="")):
+    """Connection status for the status dot: {connected, number, state, qrUrl?}."""
+    claims = _require_user(authorization)
+    return await _wa_proxy("GET", "/status", claims.get("email", ""))
+
+
+@app.post("/wa/connect")
+async def wa_connect(authorization: str = Header(default="")):
+    """Start (or refresh) QR pairing for this user; returns {state, qrUrl}."""
+    claims = _require_user(authorization)
+    return await _wa_proxy("POST", "/login", claims.get("email", ""))
+
+
+@app.post("/wa/logout")
+async def wa_logout(authorization: str = Header(default="")):
+    """Disconnect this user's WhatsApp (unlink + wipe local session)."""
+    claims = _require_user(authorization)
+    return await _wa_proxy("POST", "/logout", claims.get("email", ""))
+
+
+@app.get("/wa/disconnect-stats")
+async def wa_disconnect_stats(authorization: str = Header(default="")):
+    """Last 5 IST days of "WhatsApp was disconnected while a message was due"
+    dispatcher ticks. Shown to the user right after they log in. Zero-filled,
+    newest day first: {"days":[{"day","ticks"}...], "totalTicks":N}."""
+    _require_user(authorization)
+    try:
+        pool = await _pg()
+        rows = await pool.fetch(
+            """
+            SELECT to_char(d::date, 'YYYY-MM-DD') AS day,
+                   COALESCE(t.disconnected_ticks, 0) AS ticks
+            FROM generate_series(
+                   (now() AT TIME ZONE 'Asia/Kolkata')::date - interval '4 days',
+                   (now() AT TIME ZONE 'Asia/Kolkata')::date,
+                   interval '1 day') d
+            LEFT JOIN disconnected_whatsapp_ticks_daily t ON t.day = d::date
+            ORDER BY day DESC
+            """
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": "db_unreachable", "message": str(exc)}, status_code=502)
+    days = [{"day": r["day"], "ticks": int(r["ticks"])} for r in rows]
+    return {"ok": True, "days": days, "totalTicks": sum(d["ticks"] for d in days)}

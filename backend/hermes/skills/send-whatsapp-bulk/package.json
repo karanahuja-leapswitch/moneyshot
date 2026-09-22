@@ -1,0 +1,9 @@
+{
+  "name": "hermes-skill-send-whatsapp-bulk",
+  "private": true,
+  "type": "module",
+  "description": "Paced WhatsApp bulk send (revenue recovery) with Postgres logging + 3h cooldown",
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}
