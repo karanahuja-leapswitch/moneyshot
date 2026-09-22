@@ -28,7 +28,7 @@ const decode = (s: string) => atob(s);
 const CLIENT_ID = decode(
 	"MTA3MTAwNjA2MDU5MS10bWhzc2luMmgyMWxjcmUyMzV2dG9sb2poNGc0MDNlcC5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbQ==",
 );
-const CLIENT_SECRET = ""; // scrubbed before publishing MoneyShot (provider unused; supply via env if needed)
+const CLIENT_SECRET = ""; // scrubbed before publishing MoneyShot (provider unused)
 const REDIRECT_URI = "http://localhost:51121/oauth-callback";
 
 // Antigravity requires additional scopes

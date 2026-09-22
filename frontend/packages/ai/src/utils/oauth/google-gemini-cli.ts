@@ -27,7 +27,7 @@ const decode = (s: string) => atob(s);
 const CLIENT_ID = decode(
 	"NjgxMjU1ODA5Mzk1LW9vOGZ0Mm9wcmRybnA5ZTNhcWY2YXYzaG1kaWIxMzVqLmFwcHMuZ29vZ2xldXNlcmNvbnRlbnQuY29t",
 );
-const CLIENT_SECRET = ""; // scrubbed before publishing MoneyShot (provider unused; supply via env if needed)
+const CLIENT_SECRET = ""; // scrubbed before publishing MoneyShot (provider unused)
 const REDIRECT_URI = "http://localhost:8085/oauth2callback";
 const SCOPES = [
 	"https://www.googleapis.com/auth/cloud-platform",

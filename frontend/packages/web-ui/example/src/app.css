@@ -222,3 +222,372 @@ body {
 	backdrop-filter: none !important;
 	padding-left: 14px !important;
 }
+
+/* ==========================================================================
+   WhatsApp connect flow — avatar dropdown + connect screen (glass theme)
+   ========================================================================== */
+.ms-menu {
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+
+.ms-dd-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 40;
+	background: transparent;
+}
+/* Match the Ultron Data Gateway dropdown (.hb-dd-menu): opaque brown menu,
+   pill items highlighting brown on hover, white text. */
+.ms-dropdown {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	z-index: 50;
+	min-width: 236px;
+	margin: 0;
+	padding: 6px;
+	border-radius: 18px;
+	background: #705030;
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	box-shadow: 0 16px 34px rgba(0, 0, 0, 0.45);
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.ms-dd-email {
+	padding: 8px 14px;
+	font-size: 12px;
+	color: rgba(255, 255, 255, 0.6);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+	margin-bottom: 4px;
+}
+.ms-dd-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 9px 14px;
+	border: none;
+	border-radius: 999px;
+	background: transparent;
+	color: rgba(255, 255, 255, 0.95);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	text-align: left;
+	cursor: pointer;
+	transition: background 0.14s ease;
+}
+.ms-dd-item:hover:not(:disabled) {
+	background: #8a6540;
+}
+.ms-dd-item--static,
+.ms-dd-item:disabled {
+	cursor: default;
+}
+.ms-dd-icon {
+	width: 14px;
+	text-align: center;
+	color: rgba(255, 255, 255, 0.72);
+}
+.ms-dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 999px;
+	flex: 0 0 auto;
+	box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+}
+.ms-dot--green {
+	background: #22c55e;
+	box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+}
+.ms-dot--orange {
+	background: #f59e0b;
+	box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+}
+
+/* ---- Connect screen ---- */
+.ms-header--connect {
+	justify-content: space-between;
+}
+.ms-back {
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	background: rgba(255, 255, 255, 0.08);
+	color: #fff;
+	font: inherit;
+	font-size: 13.5px;
+	padding: 6px 14px;
+	border-radius: 999px;
+	cursor: pointer;
+	transition: background 0.14s ease;
+}
+.ms-back:hover {
+	background: rgba(255, 255, 255, 0.14);
+}
+.ms-connect {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 18px;
+	padding: 24px 18px 32px;
+	text-align: center;
+}
+.ms-connect-title {
+	margin: 0;
+	color: #fff;
+	font-size: clamp(22px, 3vw, 30px);
+	font-weight: 650;
+	letter-spacing: -0.02em;
+}
+.ms-connect-sub {
+	margin: 0;
+	max-width: 420px;
+	color: rgba(255, 255, 255, 0.7);
+	font-size: 14px;
+	line-height: 1.5;
+}
+.ms-qr-box {
+	width: 260px;
+	height: 260px;
+	padding: 14px;
+	background: #fff;
+	border-radius: 18px;
+	display: grid;
+	place-items: center;
+	box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+}
+.ms-qr {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	image-rendering: pixelated;
+}
+.ms-steps {
+	margin: 0;
+	padding-left: 20px;
+	max-width: 360px;
+	text-align: left;
+	color: rgba(255, 255, 255, 0.82);
+	font-size: 14px;
+	line-height: 1.9;
+}
+.ms-steps strong {
+	color: #fff;
+}
+.ms-alert {
+	width: 100%;
+	max-width: 420px;
+	padding: 12px 16px;
+	border-radius: 12px;
+	font-size: 14px;
+	border: 1px solid transparent;
+}
+.ms-alert--green {
+	background: rgba(34, 197, 94, 0.14);
+	border-color: rgba(34, 197, 94, 0.4);
+	color: #86efac;
+}
+.ms-alert--amber {
+	background: rgba(245, 158, 11, 0.14);
+	border-color: rgba(245, 158, 11, 0.4);
+	color: #fcd34d;
+}
+.ms-alert--red {
+	background: rgba(239, 68, 68, 0.14);
+	border-color: rgba(239, 68, 68, 0.4);
+	color: #fca5a5;
+}
+.ms-btn {
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	background: linear-gradient(180deg, rgba(99, 102, 241, 0.95), rgba(79, 70, 229, 0.95));
+	color: #fff;
+	font: inherit;
+	font-size: 15px;
+	font-weight: 600;
+	padding: 11px 24px;
+	border-radius: 999px;
+	cursor: pointer;
+	transition: transform 0.08s ease, opacity 0.2s ease;
+}
+.ms-btn:hover:not(:disabled) {
+	transform: translateY(-1px);
+}
+.ms-btn:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+.ms-btn--danger {
+	background: rgba(239, 68, 68, 0.18);
+	border-color: rgba(239, 68, 68, 0.45);
+}
+
+/* ---- Live tool-status pills (Hermes tool progress) ---- */
+/* Single pill, left-aligned to the message column, just above the composer —
+   ChatGPT/Claude style (one step at a time, below the last message). */
+.ms-pills {
+	position: absolute;
+	left: 50%;
+	bottom: 88px; /* clear the composer */
+	transform: translateX(-50%);
+	z-index: 30;
+	width: min(768px, calc(100% - 32px));
+	display: flex;
+	justify-content: flex-start;
+	padding: 0 16px;
+	pointer-events: none;
+	transition: opacity 0.4s ease;
+}
+.ms-pills--fade {
+	opacity: 0;
+}
+.ms-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px;
+	border-radius: 999px;
+	background: rgba(24, 30, 42, 0.9);
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	box-shadow: 0 8px 22px rgba(0, 0, 0, 0.34);
+	backdrop-filter: blur(18px) saturate(150%);
+	color: #fff;
+	font-size: 13px;
+	line-height: 1.2;
+}
+.ms-pill--done {
+	color: rgba(255, 255, 255, 0.72);
+}
+.ms-pill-emoji {
+	font-size: 14px;
+	line-height: 1;
+}
+.ms-pill-check {
+	color: #22c55e;
+	font-weight: 700;
+}
+.ms-pill-spin {
+	width: 12px;
+	height: 12px;
+	border-radius: 999px;
+	border: 2px solid rgba(255, 255, 255, 0.25);
+	border-top-color: #fff;
+	animation: ms-spin 0.7s linear infinite;
+}
+@keyframes ms-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* ---- WhatsApp disconnect-stats login banner ---- */
+.ms-wa-banner {
+	flex-shrink: 0;
+	margin: 12px 16px 0;
+	padding: 12px 14px;
+	border-radius: 14px;
+	background: rgba(245, 158, 11, 0.12);
+	border: 1px solid rgba(245, 158, 11, 0.38);
+	color: #fcd34d;
+	font-size: 13.5px;
+	line-height: 1.5;
+}
+.ms-wa-banner-main {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+}
+.ms-wa-banner-icon {
+	flex: 0 0 auto;
+	font-size: 15px;
+	line-height: 1.4;
+}
+.ms-wa-banner-text {
+	flex: 1;
+	min-width: 0;
+}
+.ms-wa-banner-text strong {
+	color: #fde68a;
+}
+.ms-wa-banner-toggle {
+	display: inline-block;
+	margin-left: 8px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: #fcd34d;
+	font: inherit;
+	font-size: 12.5px;
+	font-weight: 600;
+	text-decoration: underline;
+	cursor: pointer;
+}
+.ms-wa-banner-close {
+	flex: 0 0 auto;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 999px;
+	background: transparent;
+	color: #fcd34d;
+	font-size: 18px;
+	line-height: 1;
+	cursor: pointer;
+}
+.ms-wa-banner-close:hover {
+	background: rgba(245, 158, 11, 0.18);
+}
+/* Per-day breakdown: revealed on hover OR when expanded via the toggle. */
+.ms-wa-banner-days {
+	display: none;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid rgba(245, 158, 11, 0.28);
+}
+.ms-wa-banner:hover .ms-wa-banner-days,
+.ms-wa-banner--expanded .ms-wa-banner-days {
+	display: flex;
+}
+.ms-wa-day {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: rgba(245, 158, 11, 0.14);
+	border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.ms-wa-day-date {
+	color: rgba(255, 255, 255, 0.82);
+	font-variant-numeric: tabular-nums;
+}
+.ms-wa-day-ticks {
+	font-weight: 700;
+	color: #fde68a;
+}
+
+/* Sign-in screen: use the same cursive wordmark as the logged-in header, and
+   size the cloud badge to the cap height of the 'M' so the orange square's top
+   and bottom edges align with the letter. */
+.ms-board--signin .ms-title {
+	font-family: "Edu NSW ACT Cursive", cursive;
+	font-weight: 400;
+	letter-spacing: normal;
+	/* 30% smaller than the base title (clamp(32,5vw,60) → ×0.7). */
+	font-size: clamp(22px, 3.5vw, 42px);
+}
+/* Badge spans the full text height so its top/bottom edges align with the
+   "MoneyShot" text top/bottom. */
+.ms-board--signin .ms-cloud {
+	height: 1.15em;
+	width: 1.15em;
+}
