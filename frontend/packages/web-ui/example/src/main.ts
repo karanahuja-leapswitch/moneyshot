@@ -410,7 +410,7 @@ type WaStatus = { ok?: boolean; state: WaState; number?: string; qrUrl?: string 
 const WA_API = "/moneyshot/api";
 
 // UI view + dropdown + WhatsApp state.
-let view: "chat" | "connect-whatsapp" = "chat";
+let view: "chat" | "connect-whatsapp" | "channels" = "chat";
 let dropdownOpen = false;
 let waStatus: WaStatus | null = null; // last /wa/status snapshot (null = not fetched yet)
 let waConnecting = false; // POST /wa/connect in flight
@@ -814,6 +814,416 @@ function renderToolPills() {
 // Render
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Channels screen (/moneyshot/channels): a customer's message history across
+// channels, with on-demand history sync for recent messages.
+//
+// Backend contract (same-origin /moneyshot/api/*, Bearer = Google ID token):
+//   GET  /customers?q=<fuzzy>&limit=8
+//        -> { customers: [{ id, name, company? }] }
+//   GET  /messages?customer=<id>[&channel=<channelId>]
+//        -> { messages: [{ id, channel, direction:"in"|"out", text, timestamp, from?, to? }] }
+//   POST /history/sync  { customer, channel? }  -> { ok, synced? }   (on-demand sync)
+// Until those exist the UI falls back to sample data so it stays viewable.
+// ---------------------------------------------------------------------------
+
+type Channel = { id: string; label: string; emoji: string; color: string };
+const CHANNELS: Channel[] = [
+	{ id: "whatsapp-karan", label: "Karan's WhatsApp", emoji: "💬", color: "#25d366" },
+	{ id: "whatsapp-cloudpe", label: "CloudPe WhatsApp", emoji: "💬", color: "#0b7d68" },
+	{ id: "slack", label: "Slack", emoji: "#", color: "#611f69" },
+	{ id: "hostbill", label: "HostBill", emoji: "🧾", color: "#2f6fed" },
+	{ id: "gmail", label: "Gmail", emoji: "✉️", color: "#ea4335" },
+];
+const channelById = (id: string | null): Channel | undefined => CHANNELS.find((c) => c.id === id);
+
+type Customer = { id: string; name: string; company?: string };
+type ChanMsg = { id?: string; channel: string; direction?: "in" | "out"; text: string; timestamp?: string | number };
+
+let channelsCustomer: Customer | null = null;
+let channelsChannel: string | null = null; // null = all channels
+let channelsMessages: ChanMsg[] | null = null;
+let channelsLoading = false;
+let channelsUsingSample = false;
+let syncing = false;
+let searchQuery = "";
+let searchSuggestions: Customer[] = [];
+let searchOpen = false;
+let searchDebounce: number | null = null;
+let searchActive = -1; // keyboard-highlighted suggestion index
+let channelsCollapsed = false;
+
+// Gmail sync needs an OAuth *access* token (scope gmail.readonly) — separate from
+// the sign-in *ID* token. Obtained on demand via GIS, cached in memory only.
+let gmailTokenClient: any = null;
+let gmailAccessToken: string | null = null;
+let gmailTokenExp = 0; // epoch ms
+
+// Fallback sample data (until the backend endpoints exist).
+const SAMPLE_CUSTOMERS: Customer[] = [
+	{ id: "s1", name: "Rahul Sharma", company: "Acme Corp" },
+	{ id: "s2", name: "Priya Patel", company: "CloudPe" },
+	{ id: "s3", name: "Karan Ahuja", company: "Leapswitch" },
+	{ id: "s4", name: "Anita Verma", company: "Nimbus Ltd" },
+	{ id: "s5", name: "Vivek Nair", company: "Skyline" },
+];
+function sampleMessages(cust: Customer, channel: string | null): ChanMsg[] {
+	const now = Date.now();
+	const base: ChanMsg[] = [
+		{ channel: "whatsapp-karan", direction: "in", text: `Hi, this is ${cust.name}. Is my invoice paid?`, timestamp: now - 3600e3 * 6 },
+		{ channel: "whatsapp-karan", direction: "out", text: "Hello! Let me check that for you.", timestamp: now - 3600e3 * 5.9 },
+		{ channel: "gmail", direction: "in", text: "Please find attached the PO for the renewal.", timestamp: now - 3600e3 * 30 },
+		{ channel: "slack", direction: "out", text: "Shared the renewal quote in the thread.", timestamp: now - 3600e3 * 2 },
+		{ channel: "hostbill", direction: "in", text: "Ticket #4821 opened: renewal query.", timestamp: now - 3600e3 * 1 },
+		{ channel: "whatsapp-cloudpe", direction: "out", text: "Here is your payment link.", timestamp: now - 3600e3 * 0.5 },
+	];
+	return channel ? base.filter((m) => m.channel === channel) : base;
+}
+function fuzzyMatch(hay: string, q: string): boolean {
+	hay = hay.toLowerCase();
+	q = q.toLowerCase();
+	let i = 0;
+	for (const ch of hay) if (ch === q[i]) i++;
+	return i >= q.length;
+}
+
+async function fetchCustomers(q: string): Promise<Customer[]> {
+	const res = await waFetch(`/customers?q=${encodeURIComponent(q)}&limit=8`);
+	if (!res.ok) throw new Error(`customers ${res.status}`);
+	const d = await res.json();
+	return Array.isArray(d?.customers) ? d.customers : [];
+}
+async function fetchMessages(customerId: string, channel: string | null): Promise<ChanMsg[]> {
+	const qs = new URLSearchParams({ customer: customerId });
+	if (channel) qs.set("channel", channel);
+	const res = await waFetch(`/messages?${qs.toString()}`);
+	if (!res.ok) throw new Error(`messages ${res.status}`);
+	const d = await res.json();
+	return Array.isArray(d?.messages) ? d.messages : [];
+}
+async function postHistorySync(customerId: string, channel: string | null, gmailToken?: string | null): Promise<void> {
+	const headers: Record<string, string> = { "content-type": "application/json" };
+	// Only gmail needs this extra header; the ID-token Bearer is added by waFetch.
+	if (gmailToken) headers["X-Google-Access-Token"] = gmailToken;
+	await waFetch("/history/sync", {
+		method: "POST",
+		headers,
+		body: JSON.stringify({ customer: customerId, channel: channel ?? undefined }),
+	});
+}
+
+// Request (or silently renew) a Gmail readonly OAuth access token via GIS.
+// interactive=true shows the one-time consent popup; false does a silent re-issue.
+function getGmailAccessToken(interactive: boolean): Promise<string | null> {
+	const oauth2 = window.google?.accounts?.oauth2;
+	if (!oauth2) return Promise.resolve(null);
+	if (!gmailTokenClient) {
+		gmailTokenClient = oauth2.initTokenClient({
+			client_id: GOOGLE_CLIENT_ID,
+			scope: "https://www.googleapis.com/auth/gmail.readonly",
+			callback: () => {},
+		});
+	}
+	return new Promise((resolve) => {
+		let settled = false;
+		const done = (t: string | null) => {
+			if (!settled) {
+				settled = true;
+				resolve(t);
+			}
+		};
+		gmailTokenClient.callback = (resp: any) => {
+			if (resp?.access_token) {
+				gmailAccessToken = resp.access_token;
+				gmailTokenExp = Date.now() + (Number(resp.expires_in) || 3600) * 1000;
+				done(resp.access_token);
+			} else {
+				done(null);
+			}
+		};
+		try {
+			gmailTokenClient.requestAccessToken(interactive ? {} : { prompt: "" });
+		} catch {
+			done(null);
+		}
+		window.setTimeout(() => done(null), 60000); // safety net
+	});
+}
+
+// A cached, still-valid gmail access token, or null.
+function cachedGmailToken(): string | null {
+	return gmailAccessToken && Date.now() < gmailTokenExp - 60_000 ? gmailAccessToken : null;
+}
+
+function onSearchInput(value: string) {
+	searchQuery = value;
+	searchOpen = true;
+	searchActive = -1;
+	if (searchDebounce !== null) clearTimeout(searchDebounce);
+	searchDebounce = window.setTimeout(async () => {
+		const q = searchQuery.trim();
+		if (!q) {
+			searchSuggestions = [];
+			searchActive = -1;
+			renderApp();
+			return;
+		}
+		try {
+			searchSuggestions = await fetchCustomers(q);
+		} catch {
+			searchSuggestions = SAMPLE_CUSTOMERS.filter((c) => fuzzyMatch(c.name, q) || fuzzyMatch(c.company ?? "", q));
+		}
+		searchActive = searchSuggestions.length ? 0 : -1; // preselect the first match
+		renderApp();
+	}, 180);
+}
+
+// Arrow-key navigation of the autocomplete list: ↓/↑ move, Enter picks, Esc closes.
+function onSearchKey(e: KeyboardEvent) {
+	if (e.key === "Escape") {
+		searchOpen = false;
+		renderApp();
+		return;
+	}
+	const n = searchSuggestions.length;
+	if (!searchOpen || n === 0) return;
+	if (e.key === "ArrowDown") {
+		e.preventDefault();
+		searchActive = (searchActive + 1) % n;
+		renderApp();
+	} else if (e.key === "ArrowUp") {
+		e.preventDefault();
+		searchActive = (searchActive - 1 + n) % n;
+		renderApp();
+	} else if (e.key === "Enter") {
+		if (searchActive >= 0 && searchActive < n) {
+			e.preventDefault();
+			void selectCustomer(searchSuggestions[searchActive]);
+		}
+	}
+}
+async function selectCustomer(c: Customer) {
+	channelsCustomer = c;
+	searchQuery = c.name;
+	searchOpen = false;
+	searchSuggestions = [];
+	channelsChannel = null;
+	await loadChannelMessages();
+}
+async function selectChannel(id: string | null) {
+	channelsChannel = id;
+	await loadChannelMessages();
+}
+async function loadChannelMessages() {
+	if (!channelsCustomer) return;
+	channelsLoading = true;
+	channelsUsingSample = false;
+	renderApp();
+	try {
+		channelsMessages = await fetchMessages(channelsCustomer.id, channelsChannel);
+	} catch {
+		channelsMessages = sampleMessages(channelsCustomer, channelsChannel);
+		channelsUsingSample = true;
+	} finally {
+		channelsLoading = false;
+		renderApp();
+	}
+}
+async function syncRecent() {
+	if (!channelsCustomer || syncing) return;
+
+	// Gmail: attach an access token. Use a cached one if valid; otherwise, when
+	// syncing the gmail channel specifically, request one (interactive consent on
+	// first use, silent renew afterwards). Done before the fetch so the popup is
+	// close to the click gesture. "All channels" sync only forwards a cached token.
+	let gmailToken: string | null = cachedGmailToken();
+	if (!gmailToken && channelsChannel === "gmail") {
+		gmailToken = await getGmailAccessToken(gmailAccessToken === null);
+		if (!gmailToken && gmailAccessToken !== null) gmailToken = await getGmailAccessToken(true);
+	}
+
+	syncing = true;
+	renderApp();
+	try {
+		await postHistorySync(channelsCustomer.id, channelsChannel, gmailToken);
+	} catch {
+		/* endpoint may not exist yet — just refetch */
+	}
+	await loadChannelMessages();
+	syncing = false;
+	renderApp();
+}
+function fmtTime(ts?: string | number): string {
+	if (ts === undefined || ts === null) return "";
+	const d = new Date(ts);
+	if (isNaN(d.getTime())) return "";
+	return d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function currentRouteView(): "channels" | "chat" {
+	return window.location.pathname.replace(/\/+$/, "").endsWith("/moneyshot/channels") ? "channels" : "chat";
+}
+function navigate(path: string) {
+	window.history.pushState({}, "", path);
+	dropdownOpen = false;
+	view = currentRouteView();
+	renderApp();
+}
+window.addEventListener("popstate", () => {
+	if (view !== "connect-whatsapp") view = currentRouteView();
+	renderApp();
+});
+
+function renderChannelIcon(c: Channel) {
+	return html`<span class="ms-ch-ico" style="background:${c.color}">${c.emoji}</span>`;
+}
+
+function renderChanMsg(m: ChanMsg) {
+	const c = channelById(m.channel);
+	const out = m.direction === "out";
+	return html`
+		<div class="ms-msg ${out ? "ms-msg--out" : "ms-msg--in"}">
+			<div class="ms-msg-bubble">
+				${channelsChannel === null && c ? html`<span class="ms-msg-chan">${c.emoji} ${c.label}</span>` : ""}
+				<span class="ms-msg-text">${m.text}</span>
+				<span class="ms-msg-time">${fmtTime(m.timestamp)}</span>
+			</div>
+		</div>
+	`;
+}
+
+function renderChannelsMain() {
+	if (!channelsCustomer) {
+		return html`<div class="ms-ch-empty">Search a customer above to view their messages.</div>`;
+	}
+	const chan = channelById(channelsChannel);
+	return html`
+		<div class="ms-ch-head">
+			<div class="ms-ch-head-info">
+				<span class="ms-ch-cust">${channelsCustomer.name}</span>
+				${channelsCustomer.company ? html`<span class="ms-ch-co">${channelsCustomer.company}</span>` : ""}
+				<span class="ms-ch-scope">${chan ? html`${renderChannelIcon(chan)} ${chan.label}` : "All channels"}</span>
+			</div>
+			<button class="ms-sync-btn" type="button" ?disabled=${syncing} @click=${() => void syncRecent()} title="Pull recent messages">
+				${syncing ? "Syncing…" : "⟳ Sync recent"}
+			</button>
+		</div>
+		${channelsUsingSample ? html`<div class="ms-ch-sample">Sample data — backend history endpoints not connected yet.</div>` : ""}
+		${
+			channelsLoading
+				? html`<div class="ms-ch-empty">Loading…</div>`
+				: !channelsMessages || channelsMessages.length === 0
+					? html`<div class="ms-ch-empty">No messages${chan ? html` on ${chan.label}` : ""}.</div>`
+					: html`<div class="ms-ch-msgs">${channelsMessages.map((m) => renderChanMsg(m))}</div>`
+		}
+	`;
+}
+
+function renderChannels() {
+	const app = document.getElementById("app");
+	if (!app) return;
+	render(
+		html`
+			<div class="ms-scene">
+				<div class="ms-board ms-channels">
+					<div class="ms-header ms-channels-header">
+						<button class="ms-back" type="button" @click=${() => navigate("/moneyshot/")}>← Chat</button>
+						<div class="ms-search">
+							<input
+								class="ms-search-input"
+								type="text"
+								placeholder="Search customer…"
+								autocomplete="off"
+								.value=${searchQuery}
+								@input=${(e: Event) => onSearchInput((e.target as HTMLInputElement).value)}
+								@keydown=${(e: KeyboardEvent) => onSearchKey(e)}
+								@focus=${() => {
+									searchOpen = true;
+									renderApp();
+								}}
+							/>
+							${
+								searchOpen && searchSuggestions.length
+									? html`<div class="ms-search-menu">
+											${searchSuggestions.map(
+												(c, i) => html`<button
+													class="ms-search-item ${i === searchActive ? "ms-search-item--active" : ""}"
+													type="button"
+													@mouseenter=${() => {
+														searchActive = i;
+														renderApp();
+													}}
+													@click=${() => void selectCustomer(c)}
+												>
+													<span class="ms-search-name">${c.name}</span>
+													${c.company ? html`<span class="ms-search-co">${c.company}</span>` : ""}
+												</button>`,
+											)}
+										</div>`
+									: ""
+							}
+						</div>
+						<div class="ms-user">
+							<h1 class="ms-title ms-title--sm"><img class="ms-cloud" src="/moneyshot/cloud-badge-v4.png" alt="" />MoneyShot</h1>
+							<div class="ms-menu">
+								<button class="ms-avatar" type="button" @click=${toggleDropdown} title=${user?.email ?? ""}>
+									${
+										user?.picture
+											? html`<img src=${user.picture} alt="" referrerpolicy="no-referrer" />`
+											: html`<span>${(user?.name || user?.email || "?").slice(0, 1).toUpperCase()}</span>`
+									}
+								</button>
+								${dropdownOpen ? renderDropdown() : ""}
+							</div>
+						</div>
+					</div>
+
+					<div class="ms-channels-body">
+						<div class="ms-channels-list ${channelsCollapsed ? "ms-channels-list--collapsed" : ""}">
+							<div class="ms-ch-items">
+								<button
+									class="ms-ch-item ${channelsChannel === null ? "ms-ch-item--active" : ""}"
+									type="button"
+									title="All channels"
+									@click=${() => void selectChannel(null)}
+								>
+									<span class="ms-ch-ico ms-ch-ico--all">◧</span>
+									<span class="ms-ch-label">All channels</span>
+								</button>
+								${CHANNELS.map(
+									(c) => html`<button
+										class="ms-ch-item ${channelsChannel === c.id ? "ms-ch-item--active" : ""}"
+										type="button"
+										title=${c.label}
+										@click=${() => void selectChannel(c.id)}
+									>
+										${renderChannelIcon(c)}
+										<span class="ms-ch-label">${c.label}</span>
+									</button>`,
+								)}
+							</div>
+							<button
+								class="ms-ch-collapse"
+								type="button"
+								title=${channelsCollapsed ? "Expand" : "Collapse"}
+								@click=${() => {
+									channelsCollapsed = !channelsCollapsed;
+									renderApp();
+								}}
+							>
+								${channelsCollapsed ? "»" : "«"}
+							</button>
+						</div>
+
+						<div class="ms-channels-main">${renderChannelsMain()}</div>
+					</div>
+				</div>
+			</div>
+		`,
+		app,
+	);
+}
+
 function renderApp() {
 	if (!user || !idToken) {
 		renderSignIn();
@@ -821,6 +1231,10 @@ function renderApp() {
 	}
 	if (view === "connect-whatsapp") {
 		renderConnectWhatsapp();
+		return;
+	}
+	if (view === "channels") {
+		renderChannels();
 		return;
 	}
 	renderChat();
@@ -917,6 +1331,10 @@ function renderDropdown() {
 			<button class="ms-dd-item" type="button" role="menuitem" @click=${() => void newChat()}>
 				<span class="ms-dd-icon">＋</span>
 				<span>New chat</span>
+			</button>
+			<button class="ms-dd-item" type="button" role="menuitem" @click=${() => navigate("/moneyshot/channels")}>
+				<span class="ms-dd-icon">🗂</span>
+				<span>Channels</span>
 			</button>
 			<button
 				class="ms-dd-item"
@@ -1051,6 +1469,7 @@ async function init() {
 		tokenExp = user.exp ?? null;
 		scheduleTokenRefresh();
 		await createAgentAndPanel();
+		view = currentRouteView();
 		renderApp();
 		void refreshWaStatus();
 		void loadWaDisconnectStats();

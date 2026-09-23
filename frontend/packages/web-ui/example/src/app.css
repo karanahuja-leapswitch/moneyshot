@@ -591,3 +591,329 @@ body {
 	height: 1.15em;
 	width: 1.15em;
 }
+
+/* ==========================================================================
+   Channels screen (/moneyshot/channels)
+   ========================================================================== */
+.ms-channels {
+	overflow: hidden;
+}
+.ms-channels-header {
+	justify-content: space-between;
+	gap: 12px;
+}
+
+/* Fuzzy customer search + autocomplete menu (brown, like the dropdown). */
+.ms-search {
+	position: relative;
+	flex: 1;
+	max-width: 420px;
+}
+.ms-search-input {
+	width: 100%;
+	height: 38px;
+	padding: 0 16px;
+	border-radius: 999px;
+	border: 1px solid rgba(255, 255, 255, 0.18);
+	background: rgba(255, 255, 255, 0.1);
+	color: #fff;
+	font: inherit;
+	font-size: 14px;
+	outline: none;
+}
+.ms-search-input::placeholder {
+	color: rgba(255, 255, 255, 0.55);
+}
+.ms-search-menu {
+	position: absolute;
+	top: calc(100% + 8px);
+	left: 0;
+	right: 0;
+	z-index: 50;
+	padding: 6px;
+	border-radius: 16px;
+	background: #705030;
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	box-shadow: 0 16px 34px rgba(0, 0, 0, 0.45);
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 320px;
+	overflow-y: auto;
+}
+.ms-search-item {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 1px;
+	padding: 8px 14px;
+	border: none;
+	border-radius: 10px;
+	background: transparent;
+	color: rgba(255, 255, 255, 0.95);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.ms-search-item:hover,
+.ms-search-item--active {
+	background: #8a6540;
+}
+.ms-search-name {
+	font-size: 14px;
+	font-weight: 600;
+}
+.ms-search-co {
+	font-size: 12px;
+	color: rgba(255, 255, 255, 0.6);
+}
+
+/* Two-column body: left list and main pane separated by a single vertical line. */
+.ms-channels-body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	gap: 0;
+	padding: 0;
+}
+
+/* Left column: transparent, full-height, divided from the main pane by a line. */
+.ms-channels-list {
+	/* Hug the widest item (icon + longest label) + padding. */
+	flex: 0 0 auto;
+	width: fit-content;
+	min-height: 0;
+	padding: 10px;
+	border-right: 1px solid rgba(255, 255, 255, 0.14);
+	display: flex;
+	flex-direction: column;
+	transition: width 0.18s ease;
+}
+.ms-ch-items {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+/* Collapse toggle pinned to the bottom-right (herdr-style). */
+.ms-ch-collapse {
+	flex-shrink: 0;
+	align-self: flex-end;
+	margin-top: 8px;
+	width: 30px;
+	height: 30px;
+	border-radius: 9px;
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	background: rgba(255, 255, 255, 0.08);
+	color: #fff;
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+	transition: background 0.14s ease;
+}
+.ms-ch-collapse:hover {
+	background: rgba(255, 255, 255, 0.16);
+}
+
+/* Collapsed: icons-only rail; labels hidden, toggle centered. */
+.ms-channels-list--collapsed {
+	width: 60px;
+}
+.ms-channels-list--collapsed .ms-ch-label {
+	display: none;
+}
+.ms-channels-list--collapsed .ms-ch-item {
+	justify-content: center;
+	padding: 9px;
+}
+.ms-channels-list--collapsed .ms-ch-collapse {
+	align-self: center;
+}
+.ms-ch-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 9px 12px;
+	border: none;
+	border-radius: 12px;
+	background: transparent;
+	color: rgba(255, 255, 255, 0.95);
+	font: inherit;
+	font-size: 13.5px;
+	font-weight: 600;
+	text-align: left;
+	cursor: pointer;
+	transition: background 0.14s ease;
+}
+.ms-ch-item:hover {
+	background: #8a6540;
+}
+.ms-ch-item--active {
+	background: #9c7550;
+}
+.ms-ch-ico {
+	flex: 0 0 auto;
+	width: 26px;
+	height: 26px;
+	border-radius: 8px;
+	display: grid;
+	place-items: center;
+	font-size: 14px;
+	color: #fff;
+	line-height: 1;
+}
+.ms-ch-ico--all {
+	background: rgba(255, 255, 255, 0.18);
+}
+
+/* Right column: messages pane (transparent — the vertical line is the only divider). */
+.ms-channels-main {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+.ms-ch-empty {
+	flex: 1;
+	display: grid;
+	place-items: center;
+	color: rgba(255, 255, 255, 0.6);
+	font-size: 14px;
+	padding: 24px;
+	text-align: center;
+}
+.ms-ch-head {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px 16px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.ms-ch-head-info {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	min-width: 0;
+}
+.ms-ch-cust {
+	color: #fff;
+	font-size: 16px;
+	font-weight: 650;
+}
+.ms-ch-co {
+	color: rgba(255, 255, 255, 0.6);
+	font-size: 13px;
+}
+.ms-ch-scope {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.1);
+	color: rgba(255, 255, 255, 0.82);
+	font-size: 12px;
+}
+.ms-ch-scope .ms-ch-ico {
+	width: 18px;
+	height: 18px;
+	font-size: 11px;
+	border-radius: 6px;
+}
+.ms-btn--sm {
+	font-size: 13px;
+	padding: 7px 14px;
+}
+.ms-ch-sample {
+	flex-shrink: 0;
+	margin: 10px 16px 0;
+	padding: 6px 12px;
+	border-radius: 10px;
+	background: rgba(245, 158, 11, 0.12);
+	border: 1px solid rgba(245, 158, 11, 0.32);
+	color: #fcd34d;
+	font-size: 12px;
+}
+.ms-ch-msgs {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 16px;
+}
+.ms-msg {
+	display: flex;
+}
+.ms-msg--out {
+	justify-content: flex-end;
+}
+.ms-msg-bubble {
+	max-width: min(560px, 80%);
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	padding: 9px 13px;
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.ms-msg--out .ms-msg-bubble {
+	background: rgba(124, 92, 43, 0.28);
+	border-color: rgba(139, 90, 43, 0.5);
+}
+.ms-msg-chan {
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.62);
+}
+.ms-msg-text {
+	color: #fff;
+	font-size: 14px;
+	line-height: 1.45;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+.ms-msg-time {
+	align-self: flex-end;
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.5);
+}
+
+/* Sync-recent button — same glass pill as the Ultron Data Gateway
+   "Get Tickets" / "Get Clients" buttons (.task-editor-save in .hb-actions--row). */
+.ms-sync-btn {
+	min-height: 36px;
+	padding: 0 14px;
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.1);
+	color: #fff;
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: pointer;
+	backdrop-filter: blur(22px) saturate(160%);
+	-webkit-backdrop-filter: blur(22px) saturate(160%);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.24),
+		0 10px 26px rgba(0, 0, 0, 0.16);
+	transition: background 0.15s ease;
+}
+.ms-sync-btn:hover:not(:disabled) {
+	background: rgba(255, 255, 255, 0.16);
+}
+.ms-sync-btn:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
